@@ -1,0 +1,50 @@
+// Firestore Security Rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users — only own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Restaurants — public read, no client writes
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow write: if false;
+
+      // Menu subcollection — public read
+      match /menu/{itemId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+
+    // Orders — create if authenticated, read own orders
+    match /orders/{orderId} {
+      allow create: if request.auth != null
+        && request.resource.data.customerId == request.auth.uid;
+      allow read: if request.auth != null
+        && resource.data.customerId == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.customerId == request.auth.uid;
+    }
+
+    // Notifications — own notifications only
+    match /notifications/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Promos — public read
+    match /promos/{promoCode} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Promo Banners — public read
+    match /promoBanners/{bannerId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

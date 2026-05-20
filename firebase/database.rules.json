@@ -1,0 +1,11 @@
+// Realtime Database Security Rules
+{
+  "rules": {
+    "liveLocations": {
+      "$riderId": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $riderId"
+      }
+    }
+  }
+}
