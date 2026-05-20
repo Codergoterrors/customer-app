@@ -54,4 +54,4 @@ customer-app/
 ## 🔗 Next Steps & Integration
 
 - Connect Firebase `google-services.json` and `GoogleService-Info.plist` to receive live Push Notifications.
-- Remove `utils/mockData.ts` implementations once the **Admin Dashboard** is developed to seed real restaurant data to Firestore. 
+- Remove `utils/mockData.ts` implementations once the **Admin Dashboard** is developed to seed real restaurant data to Firestore
