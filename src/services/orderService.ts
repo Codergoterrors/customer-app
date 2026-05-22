@@ -341,8 +341,21 @@ class OrderService {
           'pricing.deliveryFee': payout.driverPayout, // optional
         });
 
-        // Propose order to driver by setting their activeOrderId
+        // Propose order to driver:
+        // 1. Set riderId + status on the ORDER doc so Driver App's Firestore listener fires
+        // 2. Set activeOrderId on the RIDER doc
         console.log(`[ASSIGN] Proposing order to driver ${driver.riderId}`);
+
+        // Update ORDER document — this triggers the Driver App's onSnapshot listener
+        await firestore().collection('orders').doc(orderId).update({
+          riderId: driver.riderId,
+          riderName: driver.riderName,
+          riderPhone: driver.riderPhone,
+          status: 'RIDER_ASSIGNED',
+          updatedAt: Date.now(),
+        });
+
+        // Update RIDER document with activeOrderId
         await firestore().collection('riders').doc(driver.riderId).update({
           activeOrderId: orderId,
           updatedAt: Date.now(),
@@ -357,20 +370,30 @@ class OrderService {
         console.log('[ASSIGN] Waiting 15s for driver response...');
         await new Promise<void>(resolve => setTimeout(resolve, 15000));
 
-        // After 15 seconds, check if the driver actually accepted the order
+        // After 15 seconds, check if the driver accepted (status changes to PREPARING on accept)
         const checkOrder = await firestore().collection('orders').doc(orderId).get();
-        if (checkOrder.exists() && checkOrder.data()?.riderId === driver.riderId) {
-          console.log(`[ASSIGN] ✅ SUCCESS: Driver ${driver.riderId} accepted!`);
+        const checkStatus = checkOrder.data()?.status;
+        if (checkOrder.exists() && checkStatus === 'PREPARING') {
+          console.log(`[ASSIGN] ✅ SUCCESS: Driver ${driver.riderId} accepted! Status is PREPARING.`);
           return; // Driver accepted, we are done
-        } else if (checkOrder.exists() && checkOrder.data()?.status === 'CANCELLED') {
+        } else if (checkOrder.exists() && checkStatus === 'CANCELLED') {
           console.log('[ASSIGN] Order cancelled during wait');
           return;
         } else {
-          // Driver ignored it or declined it. The Driver App might have cleared their activeOrderId.
-          // Just to be safe, if we are looping, we should ensure the order is NOT assigned.
-          console.log('[ASSIGN] Driver ignored or declined. Removing proposal...');
+          // Driver ignored it or declined it (status is still RIDER_ASSIGNED or PENDING).
+          // Reset the order back to PLACED so next driver can be tried.
+          console.log(`[ASSIGN] Driver ${driver.riderId} ignored or declined. Removing proposal...`);
+
+          // Reset ORDER doc: clear rider fields and set status back to PLACED
+          await firestore().collection('orders').doc(orderId).update({
+            riderId: null,
+            riderName: null,
+            riderPhone: null,
+            status: 'PLACED',
+            updatedAt: Date.now(),
+          });
           
-          // Clear proposal from this driver if they haven't manually declined it yet
+          // Clear proposal from this driver's doc
           const checkDriver = await firestore().collection('riders').doc(driver.riderId).get();
           if (checkDriver.exists() && checkDriver.data()?.activeOrderId === orderId) {
              await firestore().collection('riders').doc(driver.riderId).update({
@@ -481,22 +504,48 @@ class OrderService {
     }
   }
 
-  // Cancel order
+  // Cancel order — also de-assigns the rider if one was assigned
   async cancelOrder(orderId: string): Promise<void> {
     try {
       const orderDoc = await firestore().collection('orders').doc(orderId).get();
-      const currentTimeline = orderDoc.data()?.statusTimeline || [];
+      const orderData = orderDoc.data();
+      const currentTimeline = orderData?.statusTimeline || [];
+      const assignedRiderId = orderData?.riderId || null;
       const newTimeline = [...currentTimeline, {
         status: 'CANCELLED',
         timestamp: Date.now(),
         note: 'Order cancelled by customer',
       }];
 
+      // Update the order: cancel + clear rider assignment
       await firestore().collection('orders').doc(orderId).update({
         status: 'CANCELLED',
+        riderId: null,
+        riderName: null,
+        riderPhone: null,
         updatedAt: Date.now(),
         statusTimeline: newTimeline,
       });
+
+      // De-assign the rider if one was assigned
+      if (assignedRiderId) {
+        console.log(`[CANCEL] De-assigning rider ${assignedRiderId} from cancelled order`);
+        try {
+          await firestore().collection('riders').doc(assignedRiderId).update({
+            activeOrderId: null,
+            updatedAt: Date.now(),
+          });
+        } catch (e) {
+          console.log('[CANCEL] Error clearing rider doc:', e);
+        }
+        try {
+          await database().ref(`liveLocations/${assignedRiderId}`).update({
+            activeOrderId: null,
+          });
+        } catch (e) {
+          console.log('[CANCEL] Error clearing rider RTDB:', e);
+        }
+      }
     } catch (error) {
       console.error('Error cancelling order:', error);
       throw new Error('Failed to cancel order.');

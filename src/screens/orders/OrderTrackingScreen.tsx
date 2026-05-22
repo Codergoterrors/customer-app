@@ -10,7 +10,7 @@ import type { RouteProp } from '@react-navigation/native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
-import { setActiveOrder, setRiderLocation } from '../../store/slices/orderSlice';
+import { setActiveOrder, setRiderLocation, clearActiveOrder } from '../../store/slices/orderSlice';
 import { orderService } from '../../services';
 import { useTheme } from '../../theme/ThemeContext';
 import type { HomeStackParamList, OrderStatus, Order, RiderLiveLocation } from '../../types';
@@ -74,6 +74,11 @@ const OrderTrackingScreen: React.FC = () => {
         dispatch(setActiveOrder(updatedOrder));
         if (updatedOrder.status === 'DELIVERED') {
           setTimeout(() => navigation.navigate('DeliveryConfirmed', { orderId }), 1500);
+        }
+        // Handle cancellation: navigate back to home
+        if (updatedOrder.status === 'CANCELLED') {
+          dispatch(clearActiveOrder());
+          setTimeout(() => navigation.popToTop(), 500);
         }
       }
     });
