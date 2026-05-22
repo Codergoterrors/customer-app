@@ -231,7 +231,7 @@ const s = StyleSheet.create({
   stickyTitle: { ...Typography.bodyLarge, color: Colors.textPrimary, fontWeight: '700', flex: 1, textAlign: 'center' },
   headerImage: { height: HEADER_H, position: 'relative' },
   heroImg: { width: '100%', height: '100%' },
-  heroOverlay: { ...StyleSheet.absoluteFillObject, background: 'transparent' },
+  heroOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'transparent' },
   backBtn: {
     position: 'absolute', top: Spacing.xxl, left: Spacing.base,
     width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.white,
