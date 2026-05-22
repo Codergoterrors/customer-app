@@ -166,9 +166,10 @@ const OrderTrackingScreen: React.FC = () => {
 
   // ── Listen to rider live location ─────────────────────────────────────────
   useEffect(() => {
-    if (!order?.riderId) return;
+    const rId = activeOrder?.riderId;
+    if (!rId) return;
     const unsubLocation = orderService.onRiderLocationUpdate(
-      order.riderId,
+      rId,
       (loc) => {
         if (loc) {
           setRiderLoc(loc);
@@ -178,7 +179,7 @@ const OrderTrackingScreen: React.FC = () => {
       },
     );
     return () => unsubLocation();
-  }, [order?.riderId, dispatch]);
+  }, [activeOrder?.riderId, dispatch]);
 
   // ── Fetch OSRM route when rider location or phase changes ─────────────────
   const fetchAndSetRoute = useCallback(async (riderLat: number, riderLng: number) => {
