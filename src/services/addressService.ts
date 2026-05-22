@@ -1,13 +1,13 @@
 // Address Service — Manages saved addresses in Firestore
 import firestore from '@react-native-firebase/firestore';
-import type { SavedAddress } from '../../types';
+import type { SavedAddress } from '../types';
 
 class AddressService {
   // Get all saved addresses for a user
   async getAddresses(userId: string): Promise<SavedAddress[]> {
     try {
       const doc = await firestore().collection('users').doc(userId).get();
-      if (doc.exists) {
+      if (doc.exists()) {
         const data = doc.data();
         return (data?.savedAddresses as SavedAddress[]) || [];
       }
