@@ -8,7 +8,7 @@ import type {
   OrderDeliveryAddress,
   OrderPaymentMethod,
   RiderLiveLocation,
-} from '../../types';
+} from '../types';
 import { getDrivingRoute } from '../utils/osrm';
 
 // Haversine distance formula (km)
@@ -188,7 +188,7 @@ class OrderService {
           .collection('restaurants')
           .doc(orderData.restaurantId)
           .get();
-        if (restaurantDoc.exists) {
+        if (restaurantDoc.exists()) {
           const rData = restaurantDoc.data();
           restaurantLat = rData?.address?.lat || rData?.latitude || 0;
           restaurantLng = rData?.address?.lng || rData?.longitude || 0;
@@ -305,12 +305,12 @@ class OrderService {
       // Check if order was cancelled by customer
       try {
         const orderDoc = await firestore().collection('orders').doc(orderId).get();
-        if (orderDoc.exists && orderDoc.data()?.status === 'CANCELLED') {
+        if (orderDoc.exists() && orderDoc.data()?.status === 'CANCELLED') {
           console.log('[ASSIGN] Order was cancelled, stopping background loop');
           return;
         }
         // If order already has a rider assigned, stop loop
-        if (orderDoc.exists && orderDoc.data()?.riderId) {
+        if (orderDoc.exists() && orderDoc.data()?.riderId) {
           console.log('[ASSIGN] Order already assigned, stopping background loop');
           return;
         }
@@ -355,14 +355,14 @@ class OrderService {
 
         // Wait EXACTLY 15 seconds for driver to accept
         console.log('[ASSIGN] Waiting 15s for driver response...');
-        await new Promise(resolve => setTimeout(resolve, 15000));
+        await new Promise<void>(resolve => setTimeout(resolve, 15000));
 
         // After 15 seconds, check if the driver actually accepted the order
         const checkOrder = await firestore().collection('orders').doc(orderId).get();
-        if (checkOrder.exists && checkOrder.data()?.riderId === driver.riderId) {
+        if (checkOrder.exists() && checkOrder.data()?.riderId === driver.riderId) {
           console.log(`[ASSIGN] ✅ SUCCESS: Driver ${driver.riderId} accepted!`);
           return; // Driver accepted, we are done
-        } else if (checkOrder.exists && checkOrder.data()?.status === 'CANCELLED') {
+        } else if (checkOrder.exists() && checkOrder.data()?.status === 'CANCELLED') {
           console.log('[ASSIGN] Order cancelled during wait');
           return;
         } else {
@@ -372,7 +372,7 @@ class OrderService {
           
           // Clear proposal from this driver if they haven't manually declined it yet
           const checkDriver = await firestore().collection('riders').doc(driver.riderId).get();
-          if (checkDriver.exists && checkDriver.data()?.activeOrderId === orderId) {
+          if (checkDriver.exists() && checkDriver.data()?.activeOrderId === orderId) {
              await firestore().collection('riders').doc(driver.riderId).update({
                activeOrderId: null,
                updatedAt: Date.now(),
@@ -387,7 +387,7 @@ class OrderService {
       } else {
         // No driver found — wait 5 seconds before retrying
         console.log(`[ASSIGN] No driver found, waiting 5s (attempt ${attempt}/12)...`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise<void>(resolve => setTimeout(resolve, 5000));
       }
     }
 
@@ -398,7 +398,7 @@ class OrderService {
   async getOrder(orderId: string): Promise<Order | null> {
     try {
       const doc = await firestore().collection('orders').doc(orderId).get();
-      if (doc.exists) {
+      if (doc.exists()) {
         return doc.data() as Order;
       }
       return null;
@@ -433,7 +433,7 @@ class OrderService {
       .collection('orders')
       .doc(orderId)
       .onSnapshot((doc) => {
-        if (doc.exists) {
+        if (doc.exists()) {
           callback(doc.data() as Order);
         } else {
           callback(null);
