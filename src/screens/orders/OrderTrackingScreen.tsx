@@ -215,8 +215,8 @@ const OrderTrackingScreen: React.FC = () => {
               }}
               showsUserLocation={false}>
               {/* Restaurant marker (green) */}
-              {order && order.restaurantLat !== 0 && (
-                <Marker coordinate={{ latitude: order.restaurantLat, longitude: order.restaurantLng }} anchor={{ x: 0.5, y: 0.5 }}>
+              {order && order.restaurantLat !== undefined && order.restaurantLat !== 0 && (
+                <Marker coordinate={{ latitude: order.restaurantLat!, longitude: order.restaurantLng! }} anchor={{ x: 0.5, y: 0.5 }}>
                   <View style={s.restaurantPin}><Icon name="silverware-fork-knife" size={16} color="#FFF" /></View>
                 </Marker>
               )}
@@ -243,7 +243,7 @@ const OrderTrackingScreen: React.FC = () => {
                         ]
                       : [
                           { latitude: riderLocation.lat, longitude: riderLocation.lng },
-                          { latitude: order.restaurantLat, longitude: order.restaurantLng },
+                          { latitude: order.restaurantLat || 0, longitude: order.restaurantLng || 0 },
                           { latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng },
                         ]
                   }
