@@ -1,4 +1,4 @@
-// Order Tracking Screen — with live driver location, delivery PIN, correct status
+// Order Tracking Screen — live driver location, OSRM route, smart zoom, delivery PIN hidden until pickup
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated,
@@ -40,6 +40,80 @@ const getStageLabel = (status: OrderStatus): string => {
   return stage?.label || 'Order received';
 };
 
+// ── Haversine distance (km) ───────────────────────────────────────────────────
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ── OSRM road-following route fetcher ────────────────────────────────────────
+async function fetchOSRMRoute(
+  startLat: number, startLng: number,
+  endLat: number, endLng: number,
+): Promise<{ latitude: number; longitude: number }[]> {
+  try {
+    if (startLat === 0 || endLat === 0) return [];
+    const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const resp = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(tid);
+    const data = await resp.json();
+    if (data.code === 'Ok' && data.routes?.length) {
+      return data.routes[0].geometry.coordinates.map(
+        ([lng, lat]: [number, number]) => ({ latitude: lat, longitude: lng }),
+      );
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+// ── Trim already-passed waypoints from route ──────────────────────────────────
+function trimPassedRoute(
+  route: { latitude: number; longitude: number }[],
+  driverLat: number, driverLng: number,
+): { latitude: number; longitude: number }[] {
+  if (route.length < 2) return route;
+  let minDist = Infinity;
+  let closestIdx = 0;
+  for (let i = 0; i < route.length; i++) {
+    const d = haversineKm(driverLat, driverLng, route[i].latitude, route[i].longitude);
+    if (d < minDist) { minDist = d; closestIdx = i; }
+  }
+  return route.slice(closestIdx);
+}
+
+// ── Big Red Drop-off Pin ──────────────────────────────────────────────────────
+const RedDropPin: React.FC = () => (
+  <View style={{ alignItems: 'center' }}>
+    <View style={{
+      width: 42, height: 42, borderRadius: 21,
+      backgroundColor: '#E8003D',
+      justifyContent: 'center', alignItems: 'center',
+      borderWidth: 3, borderColor: '#FFF',
+      elevation: 8, shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.4, shadowRadius: 4,
+    }}>
+      <Icon name="map-marker" size={24} color="#FFF" />
+    </View>
+    <View style={{
+      width: 0, height: 0,
+      borderLeftWidth: 9, borderRightWidth: 9, borderTopWidth: 14,
+      borderLeftColor: 'transparent', borderRightColor: 'transparent',
+      borderTopColor: '#E8003D', marginTop: -3,
+    }} />
+  </View>
+);
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
 const OrderTrackingScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<Nav>();
@@ -50,13 +124,19 @@ const OrderTrackingScreen: React.FC = () => {
 
   const [order, setOrder] = useState<Order | null>(activeOrder);
   const [riderLocation, setRiderLoc] = useState<RiderLiveLocation | null>(null);
+  const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const mapRef = useRef<MapView>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const lastRouteFetchRef = useRef(0);
+  const lastRiderLocRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const currentStatus = order?.status || 'PLACED';
   const stageIndex = getStageIndex(currentStatus);
   const totalStages = ORDER_STAGES.length - 1;
   const progressPercent = Math.min(stageIndex / (totalStages - 1), 1);
+
+  // Is order in delivery phase?
+  const isDeliveryPhase = currentStatus === 'PICKED_UP' || currentStatus === 'ON_THE_WAY';
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -66,7 +146,7 @@ const OrderTrackingScreen: React.FC = () => {
     }).start();
   }, [progressPercent]);
 
-  // Listen to order updates
+  // ── Listen to order updates ───────────────────────────────────────────────
   useEffect(() => {
     const unsubOrder = orderService.onOrderSnapshot(orderId, (updatedOrder) => {
       if (updatedOrder) {
@@ -75,7 +155,6 @@ const OrderTrackingScreen: React.FC = () => {
         if (updatedOrder.status === 'DELIVERED') {
           setTimeout(() => navigation.navigate('DeliveryConfirmed', { orderId }), 1500);
         }
-        // Handle cancellation: navigate back to home
         if (updatedOrder.status === 'CANCELLED') {
           dispatch(clearActiveOrder());
           setTimeout(() => navigation.popToTop(), 500);
@@ -85,7 +164,7 @@ const OrderTrackingScreen: React.FC = () => {
     return () => unsubOrder();
   }, [orderId, dispatch, navigation]);
 
-  // Listen to rider live location — continuously
+  // ── Listen to rider live location ─────────────────────────────────────────
   useEffect(() => {
     if (!order?.riderId) return;
     const unsubLocation = orderService.onRiderLocationUpdate(
@@ -94,31 +173,105 @@ const OrderTrackingScreen: React.FC = () => {
         if (loc) {
           setRiderLoc(loc);
           dispatch(setRiderLocation(loc));
+          lastRiderLocRef.current = { lat: loc.lat, lng: loc.lng };
         }
       },
     );
     return () => unsubLocation();
   }, [order?.riderId, dispatch]);
 
-  // Fit map to show rider and delivery point
+  // ── Fetch OSRM route when rider location or phase changes ─────────────────
+  const fetchAndSetRoute = useCallback(async (riderLat: number, riderLng: number) => {
+    if (!order) return;
+    const now = Date.now();
+    lastRouteFetchRef.current = now;
+
+    // Pick destination based on phase
+    const toLat = isDeliveryPhase ? order.deliveryAddress.lat : (order.restaurantLat || 0);
+    const toLng = isDeliveryPhase ? order.deliveryAddress.lng : (order.restaurantLng || 0);
+
+    const coords = await fetchOSRMRoute(riderLat, riderLng, toLat, toLng);
+    // Only apply if this is still the latest fetch
+    if (lastRouteFetchRef.current === now) {
+      if (coords.length >= 2) {
+        setRouteCoords(coords);
+      } else {
+        // Straight line fallback
+        setRouteCoords([
+          { latitude: riderLat, longitude: riderLng },
+          { latitude: toLat, longitude: toLng },
+        ]);
+      }
+    }
+  }, [order, isDeliveryPhase]);
+
+  // ── Update route when rider moves ─────────────────────────────────────────
+  useEffect(() => {
+    if (!riderLocation) return;
+    const { lat: rLat, lng: rLng } = riderLocation;
+
+    // 1. Trim already-passed waypoints
+    if (routeCoords.length >= 2) {
+      const trimmed = trimPassedRoute(routeCoords, rLat, rLng);
+      if (trimmed.length !== routeCoords.length) {
+        setRouteCoords(trimmed);
+      }
+
+      // 2. Reroute if deviated more than 60m and 25s have passed
+      const nearestDist = trimmed.length > 0
+        ? haversineKm(rLat, rLng, trimmed[0].latitude, trimmed[0].longitude)
+        : 999;
+      const timeSinceLastFetch = Date.now() - lastRouteFetchRef.current;
+      if (nearestDist > 0.06 && timeSinceLastFetch > 25000) {
+        fetchAndSetRoute(rLat, rLng);
+        return;
+      }
+    }
+
+    // 3. Initial fetch if no route yet
+    if (routeCoords.length === 0) {
+      fetchAndSetRoute(rLat, rLng);
+    }
+  }, [riderLocation?.lat, riderLocation?.lng]);
+
+  // ── Refetch route when delivery phase changes ─────────────────────────────
+  useEffect(() => {
+    if (riderLocation) {
+      setRouteCoords([]); // Reset route on phase change
+      fetchAndSetRoute(riderLocation.lat, riderLocation.lng);
+    }
+  }, [isDeliveryPhase]);
+
+  // ── Smart map zoom ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!order) return;
-    const coords: { latitude: number; longitude: number }[] = [
-      { latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng },
-    ];
+    const coords: { latitude: number; longitude: number }[] = [];
+
+    // Always include rider location if available
     if (riderLocation) {
       coords.push({ latitude: riderLocation.lat, longitude: riderLocation.lng });
     }
-    if (order.restaurantLat && order.restaurantLng) {
-      coords.push({ latitude: order.restaurantLat, longitude: order.restaurantLng });
+
+    if (isDeliveryPhase) {
+      // Delivery: show rider + drop-off, zoom in progressively as rider gets closer
+      coords.push({ latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng });
+    } else {
+      // Pickup phase: show rider + restaurant + delivery location
+      if (order.restaurantLat && order.restaurantLng) {
+        coords.push({ latitude: order.restaurantLat, longitude: order.restaurantLng });
+      }
+      coords.push({ latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng });
     }
+
     if (coords.length >= 2) {
-      mapRef.current?.fitToCoordinates(coords, {
-        edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
-        animated: true,
-      });
+      setTimeout(() => {
+        mapRef.current?.fitToCoordinates(coords, {
+          edgePadding: { top: 80, right: 60, bottom: 80, left: 60 },
+          animated: true,
+        });
+      }, 600);
     }
-  }, [riderLocation, order]);
+  }, [riderLocation?.lat, riderLocation?.lng, isDeliveryPhase, order]);
 
   const estimatedArrival = useMemo(() => {
     if (!order) return '';
@@ -133,12 +286,13 @@ const OrderTrackingScreen: React.FC = () => {
   }, [order]);
 
   const canCancel = currentStatus === 'PLACED' || currentStatus === 'CONFIRMED' || currentStatus === 'PREPARING' || currentStatus === 'RIDER_ASSIGNED';
-  // Show map whenever a rider is assigned (all stages from RIDER_ASSIGNED onward)
   const showMap = currentStatus === 'RIDER_ASSIGNED' || currentStatus === 'PREPARING' ||
     currentStatus === 'PICKED_UP' || currentStatus === 'ON_THE_WAY';
   const hasRider = !!order?.riderId;
 
-  // Status-specific subtext for restaurant card
+  // Delivery PIN only shown AFTER order is picked up
+  const showDeliveryPin = (currentStatus === 'PICKED_UP' || currentStatus === 'ON_THE_WAY' || currentStatus === 'DELIVERED') && !!order?.deliveryPin;
+
   const getRestaurantSubtext = () => {
     switch (currentStatus) {
       case 'RIDER_ASSIGNED': return 'Your rider is heading to the restaurant';
@@ -149,13 +303,15 @@ const OrderTrackingScreen: React.FC = () => {
     }
   };
 
-  // "Order not ready" notification
   const orderNotReady = order?.orderNotReady || false;
 
   const progressBarWidth = progressAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
   });
+
+  // Build display route
+  const displayRoute = routeCoords.length >= 2 ? routeCoords : [];
 
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
@@ -205,7 +361,7 @@ const OrderTrackingScreen: React.FC = () => {
 
         <View style={[s.divider, { backgroundColor: colors.divider }]} />
 
-        {/* Map or Illustration */}
+        {/* Map */}
         {showMap ? (
           <View style={s.mapWrapper}>
             <MapView
@@ -219,41 +375,54 @@ const OrderTrackingScreen: React.FC = () => {
                 longitudeDelta: 0.015,
               }}
               showsUserLocation={false}>
-              {/* Restaurant marker (green) */}
+
+              {/* Restaurant marker (green circle) */}
               {order && order.restaurantLat !== undefined && order.restaurantLat !== 0 && (
                 <Marker coordinate={{ latitude: order.restaurantLat!, longitude: order.restaurantLng! }} anchor={{ x: 0.5, y: 0.5 }}>
-                  <View style={s.restaurantPin}><Icon name="silverware-fork-knife" size={16} color="#FFF" /></View>
+                  <View style={s.restaurantPin}>
+                    <Icon name="silverware-fork-knife" size={16} color="#FFF" />
+                  </View>
                 </Marker>
               )}
-              {/* Delivery location marker (black) */}
+
+              {/* Delivery location marker — Big Red Teardrop Pin */}
               {order && (
                 <Marker coordinate={{ latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng }} anchor={{ x: 0.5, y: 1 }}>
-                  <View style={s.deliveryPin}><View style={s.deliveryPinDot} /></View>
+                  <RedDropPin />
                 </Marker>
               )}
-              {/* Rider live location marker */}
+
+              {/* Rider live location — bike icon */}
               {riderLocation && (
                 <Marker coordinate={{ latitude: riderLocation.lat, longitude: riderLocation.lng }} anchor={{ x: 0.5, y: 0.5 }}>
-                  <View style={s.riderMarker}><Icon name="motorbike" size={20} color="#000" /></View>
+                  <View style={s.riderMarker}>
+                    <Icon name="motorbike" size={22} color="#000" />
+                  </View>
                 </Marker>
               )}
-              {/* Route line: rider to destination */}
-              {riderLocation && order && (
+
+              {/* Road-following route — bold and dark */}
+              {riderLocation && displayRoute.length >= 2 && (
                 <Polyline
-                  coordinates={
-                    currentStatus === 'PICKED_UP' || currentStatus === 'ON_THE_WAY'
-                      ? [
-                          { latitude: riderLocation.lat, longitude: riderLocation.lng },
-                          { latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng },
-                        ]
-                      : [
-                          { latitude: riderLocation.lat, longitude: riderLocation.lng },
-                          { latitude: order.restaurantLat || 0, longitude: order.restaurantLng || 0 },
-                          { latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng },
-                        ]
-                  }
-                  strokeColor="#000"
-                  strokeWidth={3}
+                  coordinates={displayRoute}
+                  strokeColor="#1A1A2E"
+                  strokeWidth={6}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              )}
+
+              {/* Fallback straight line if no OSRM route yet */}
+              {riderLocation && displayRoute.length === 0 && order && (
+                <Polyline
+                  coordinates={[
+                    { latitude: riderLocation.lat, longitude: riderLocation.lng },
+                    isDeliveryPhase
+                      ? { latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng }
+                      : { latitude: order.restaurantLat || 0, longitude: order.restaurantLng || 0 },
+                  ]}
+                  strokeColor="#1A1A2E"
+                  strokeWidth={6}
                 />
               )}
             </MapView>
@@ -270,16 +439,16 @@ const OrderTrackingScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Delivery PIN card — show when rider is assigned */}
-        {hasRider && order?.deliveryPin && (
+        {/* Delivery PIN card — ONLY show after order is picked up */}
+        {showDeliveryPin && (
           <View style={[s.pinCard, { backgroundColor: isDark ? '#1A1A1A' : '#F8F8F8' }]}>
             <View style={s.pinHeader}>
               <Icon name="lock-outline" size={20} color={colors.primary} />
               <Text style={[s.pinLabel, { color: colors.textPrimary }]}>Delivery PIN</Text>
             </View>
-            <Text style={[s.pinCode, { color: colors.textPrimary }]}>{order.deliveryPin}</Text>
+            <Text style={[s.pinCode, { color: colors.textPrimary }]}>{order!.deliveryPin}</Text>
             <Text style={[s.pinHint, { color: colors.textSecondary }]}>
-              Share this PIN with your delivery partner to confirm delivery
+              Share this PIN with your delivery partner when they arrive
             </Text>
           </View>
         )}
@@ -368,12 +537,19 @@ const s = StyleSheet.create({
   notReadyBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF8E1', paddingHorizontal: 20, paddingVertical: 12, marginHorizontal: 16, borderRadius: 8, marginBottom: 8 },
   notReadyText: { fontSize: 14, fontWeight: '600', color: '#F5A623', flex: 1 },
   divider: { height: 1 },
-  mapWrapper: { height: 280 },
+  mapWrapper: { height: 300 },
   map: { flex: 1 },
-  restaurantPin: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#06C167', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
-  deliveryPin: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
-  deliveryPinDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFF' },
-  riderMarker: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
+  restaurantPin: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#06C167', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
+  // Rider marker — white circle with bike icon
+  riderMarker: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#FFF',
+    justifyContent: 'center', alignItems: 'center',
+    elevation: 6, shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25, shadowRadius: 4,
+    borderWidth: 2, borderColor: '#E0E0E0',
+  },
   illustrationSection: { paddingVertical: 40, alignItems: 'center' },
   illustrationPlaceholder: { width: 160, height: 160, borderRadius: 80, justifyContent: 'center', alignItems: 'center' },
   pinCard: { marginHorizontal: 16, borderRadius: 12, padding: 16, marginVertical: 12, alignItems: 'center' },
