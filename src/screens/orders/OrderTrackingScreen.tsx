@@ -132,7 +132,7 @@ const OrderTrackingScreen: React.FC = () => {
     return late.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }, [order]);
 
-  const canCancel = currentStatus === 'PLACED' || currentStatus === 'CONFIRMED' || currentStatus === 'PREPARING';
+  const canCancel = currentStatus === 'PLACED' || currentStatus === 'CONFIRMED' || currentStatus === 'PREPARING' || currentStatus === 'RIDER_ASSIGNED';
   // Show map whenever a rider is assigned (all stages from RIDER_ASSIGNED onward)
   const showMap = currentStatus === 'RIDER_ASSIGNED' || currentStatus === 'PREPARING' ||
     currentStatus === 'PICKED_UP' || currentStatus === 'ON_THE_WAY';
