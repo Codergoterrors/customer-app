@@ -309,9 +309,14 @@ class OrderService {
           console.log('[ASSIGN] Order was cancelled, stopping background loop');
           return;
         }
-        // If order already has a rider assigned, stop loop
+        // If order already has a rider assigned (accepted), stop loop
         if (orderDoc.exists() && orderDoc.data()?.riderId) {
-          console.log('[ASSIGN] Order already assigned, stopping background loop');
+          console.log('[ASSIGN] Order already assigned (driver accepted), stopping background loop');
+          return;
+        }
+        // If order already has a proposed rider (another proposal in flight), stop loop
+        if (orderDoc.exists() && orderDoc.data()?.proposedRiderId) {
+          console.log('[ASSIGN] Order already has a proposed rider, stopping background loop');
           return;
         }
       } catch (e) {
@@ -342,16 +347,18 @@ class OrderService {
         });
 
         // Propose order to driver:
-        // 1. Set riderId + status on the ORDER doc so Driver App's Firestore listener fires
+        // 1. Set proposedRiderId on the ORDER doc so Driver App's Firestore listener fires
         // 2. Set activeOrderId on the RIDER doc
+        // NOTE: We use proposedRiderId (NOT riderId) so the Customer App still shows
+        //       'Order received' instead of 'Rider on the way'. The actual riderId is
+        //       only set when the driver taps Accept on OrderRequestScreen.
         console.log(`[ASSIGN] Proposing order to driver ${driver.riderId}`);
 
         // Update ORDER document — this triggers the Driver App's onSnapshot listener
         await firestore().collection('orders').doc(orderId).update({
-          riderId: driver.riderId,
-          riderName: driver.riderName,
-          riderPhone: driver.riderPhone,
-          status: 'RIDER_ASSIGNED',
+          proposedRiderId: driver.riderId,
+          proposedRiderName: driver.riderName,
+          proposedRiderPhone: driver.riderPhone,
           updatedAt: Date.now(),
         });
 
@@ -384,12 +391,11 @@ class OrderService {
           // Reset the order back to PLACED so next driver can be tried.
           console.log(`[ASSIGN] Driver ${driver.riderId} ignored or declined. Removing proposal...`);
 
-          // Reset ORDER doc: clear rider fields and set status back to PLACED
+          // Reset ORDER doc: clear proposed rider fields (status is still PLACED)
           await firestore().collection('orders').doc(orderId).update({
-            riderId: null,
-            riderName: null,
-            riderPhone: null,
-            status: 'PLACED',
+            proposedRiderId: null,
+            proposedRiderName: null,
+            proposedRiderPhone: null,
             updatedAt: Date.now(),
           });
           
