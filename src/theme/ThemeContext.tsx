@@ -155,7 +155,7 @@ const LightColors = {
 // ==================== TYPES ====================
 
 export type ThemeMode = 'dark' | 'light';
-export type ThemeColors = typeof DarkColors;
+export type ThemeColors = typeof DarkColors | typeof LightColors;
 
 interface ThemeContextType {
   mode: ThemeMode;
