@@ -1,7 +1,7 @@
 // Firebase Authentication Service
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import type { User } from '../../types';
+import type { User } from '../types';
 
 class AuthService {
   // Sign in with email and password
@@ -65,7 +65,7 @@ class AuthService {
   async getUserProfile(userId: string): Promise<User | null> {
     try {
       const doc = await firestore().collection('users').doc(userId).get();
-      if (doc.exists) {
+      if (doc.exists()) {
         return doc.data() as User;
       }
       return null;
