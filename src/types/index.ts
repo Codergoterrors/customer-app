@@ -176,9 +176,14 @@ export interface StatusTimelineEntry {
 export interface Order {
   orderId: string;
   customerId: string;
+  customerName?: string;
   restaurantId: string;
   restaurantName: string;
   restaurantImage: string;
+  restaurantAddress?: string;
+  restaurantLat?: number;
+  restaurantLng?: number;
+  restaurantNote?: string;
   riderId?: string;
   riderName?: string;
   riderPhone?: string;
@@ -195,6 +200,10 @@ export interface Order {
   estimatedDeliveryTime: number;
   actualDeliveryTime?: number;
   statusTimeline: StatusTimelineEntry[];
+  deliveryPin?: string;
+  orderNotReady?: boolean;
+  driverPayout?: number;
+  routeCoordinates?: Array<{ latitude: number; longitude: number }>;
   restaurantRating?: number;
   riderRatingValue?: number;
   reviewText?: string;
