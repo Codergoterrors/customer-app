@@ -26,7 +26,7 @@ const RootNavigator: React.FC = () => {
   );
 
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer linking={linking as any}>
       <StatusBar
         barStyle="light-content"
         backgroundColor={Colors.background}
