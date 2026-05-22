@@ -510,34 +510,39 @@ class OrderService {
     }
   }
 
-  // Cancel order — also de-assigns the rider if one was assigned
+  // Cancel order — also de-assigns the rider if one was assigned or proposed
   async cancelOrder(orderId: string): Promise<void> {
     try {
       const orderDoc = await firestore().collection('orders').doc(orderId).get();
       const orderData = orderDoc.data();
       const currentTimeline = orderData?.statusTimeline || [];
       const assignedRiderId = orderData?.riderId || null;
+      const proposedRiderId = orderData?.proposedRiderId || null;
+      const riderToDeassign = assignedRiderId || proposedRiderId;
       const newTimeline = [...currentTimeline, {
         status: 'CANCELLED',
         timestamp: Date.now(),
         note: 'Order cancelled by customer',
       }];
 
-      // Update the order: cancel + clear rider assignment
+      // Update the order: cancel + clear both rider and proposed rider fields
       await firestore().collection('orders').doc(orderId).update({
         status: 'CANCELLED',
         riderId: null,
         riderName: null,
         riderPhone: null,
+        proposedRiderId: null,
+        proposedRiderName: null,
+        proposedRiderPhone: null,
         updatedAt: Date.now(),
         statusTimeline: newTimeline,
       });
 
-      // De-assign the rider if one was assigned
-      if (assignedRiderId) {
-        console.log(`[CANCEL] De-assigning rider ${assignedRiderId} from cancelled order`);
+      // De-assign the rider if one was assigned or proposed
+      if (riderToDeassign) {
+        console.log(`[CANCEL] De-assigning rider ${riderToDeassign} from cancelled order`);
         try {
-          await firestore().collection('riders').doc(assignedRiderId).update({
+          await firestore().collection('riders').doc(riderToDeassign).update({
             activeOrderId: null,
             updatedAt: Date.now(),
           });
@@ -545,7 +550,7 @@ class OrderService {
           console.log('[CANCEL] Error clearing rider doc:', e);
         }
         try {
-          await database().ref(`liveLocations/${assignedRiderId}`).update({
+          await database().ref(`liveLocations/${riderToDeassign}`).update({
             activeOrderId: null,
           });
         } catch (e) {
