@@ -124,7 +124,7 @@ const HomeScreen: React.FC = () => {
           </Text>
           <Icon name="chevron-down" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.avatarBtn} onPress={() => navigation.navigate('Account')}>
+        <TouchableOpacity style={styles.avatarBtn} onPress={() => (navigation as any).navigate('Account')}>
           <Icon name="account-circle" size={36} color={colors.textSecondary} />
         </TouchableOpacity>
       </Animated.View>
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   promoSection: { marginBottom: Spacing.lg },
   promoCard: { width: SCREEN_WIDTH - 48, height: 150, borderRadius: BorderRadius.md, overflow: 'hidden', marginHorizontal: Spacing.xl },
   promoImage: { width: '100%', height: '100%' },
-  promoOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end', padding: Spacing.base },
+  promoOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end', padding: Spacing.base },
   promoTitle: { ...Typography.h3, color: '#FFFFFF', fontWeight: '700' },
   promoSub: { ...Typography.small, color: 'rgba(255,255,255,0.85)' },
   promoDots: { flexDirection: 'row', justifyContent: 'center', marginTop: Spacing.sm, gap: 6 },
