@@ -1,7 +1,7 @@
 // Firebase Notification Service
 import messaging from '@react-native-firebase/messaging';
 import firestore from '@react-native-firebase/firestore';
-import type { AppNotification } from '../../types';
+import type { AppNotification } from '../types';
 
 class NotificationService {
   // Request notification permissions
