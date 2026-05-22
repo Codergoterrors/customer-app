@@ -1,6 +1,6 @@
 // Firebase Restaurant Service
 import firestore from '@react-native-firebase/firestore';
-import type { Restaurant, MenuItem, Promo, PromoBanner } from '../../types';
+import type { Restaurant, MenuItem, Promo, PromoBanner } from '../types';
 
 class RestaurantService {
   // Fetch all restaurants
@@ -47,7 +47,7 @@ class RestaurantService {
         .doc(restaurantId)
         .get();
 
-      if (doc.exists) {
+      if (doc.exists()) {
         return { id: doc.id, ...doc.data() } as Restaurant;
       }
       return null;
@@ -94,10 +94,10 @@ class RestaurantService {
         .filter(
           (r) =>
             r.name.toLowerCase().includes(normalizedQuery) ||
-            r.cuisineType.some((c) =>
+            r.cuisineType.some((c: string) =>
               c.toLowerCase().includes(normalizedQuery),
             ) ||
-            r.tags.some((t) => t.toLowerCase().includes(normalizedQuery)),
+            r.tags.some((t: string) => t.toLowerCase().includes(normalizedQuery)),
         );
     } catch (error) {
       console.error('Error searching restaurants:', error);
@@ -131,7 +131,7 @@ class RestaurantService {
     try {
       const doc = await firestore().collection('promos').doc(code).get();
 
-      if (!doc.exists) {
+      if (!doc.exists()) {
         return { valid: false, discount: 0, message: 'Invalid promo code' };
       }
 
