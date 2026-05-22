@@ -1,5 +1,5 @@
 // Mock Data for development/demo (used when Firebase is not configured yet)
-import type { Restaurant, MenuItem, PromoBanner, Order } from '../../types';
+import type { Restaurant, MenuItem, PromoBanner, Order } from '../types';
 
 export const MOCK_PROMO_BANNERS: PromoBanner[] = [
   {
