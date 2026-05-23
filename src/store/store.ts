@@ -22,8 +22,8 @@ import locationReducer from './slices/locationSlice';
 const persistConfig = {
   key: 'root',
   storage: AsyncStorage,
-  whitelist: ['auth', 'cart', 'location'],
-  blacklist: ['restaurant', 'order', 'notification'],
+  whitelist: ['auth', 'cart', 'location', 'order'],
+  blacklist: ['restaurant', 'notification'],
 };
 
 const rootReducer = combineReducers({
