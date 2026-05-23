@@ -1,22 +1,65 @@
-// Orders Screen — Active + Past orders
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+// Orders Screen — Active + Past orders with Firestore fetch
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import firestore from '@react-native-firebase/firestore';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants';
 import { Button } from '../../components';
-import { useAppSelector } from '../../store/hooks';
+import { useAppSelector, useAppDispatch } from '../../store/hooks';
+import { setPastOrders } from '../../store/slices/orderSlice';
 import { formatCurrency, formatDate, getOrderStatusColor } from '../../utils';
-import type { OrdersStackParamList } from '../../types';
+import type { OrdersStackParamList, Order } from '../../types';
 
 type Nav = NativeStackNavigationProp<OrdersStackParamList, 'Orders'>;
 
 const OrdersScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
+  const dispatch = useAppDispatch();
   const { activeOrder, pastOrders } = useAppSelector((s) => s.order);
+  const user = useAppSelector((s) => s.auth.user);
+  const [isFetching, setIsFetching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchOrders = useCallback(async (isRefresh = false) => {
+    if (!user?.uid) return;
+    isRefresh ? setRefreshing(true) : setIsFetching(true);
+    try {
+      const snapshot = await firestore()
+        .collection('orders')
+        .where('customerId', '==', user.uid)
+        .orderBy('createdAt', 'desc')
+        .limit(30)
+        .get();
+      const orders = snapshot.docs.map(doc => ({ orderId: doc.id, ...doc.data() } as Order));
+      // Filter out active order so it doesn't appear in past orders list
+      const past = orders.filter(o => o.status !== 'PLACED' && o.status !== 'CONFIRMED' &&
+        o.status !== 'PREPARING' && o.status !== 'RIDER_ASSIGNED' &&
+        o.status !== 'PICKED_UP' && o.status !== 'ON_THE_WAY');
+      dispatch(setPastOrders(past));
+    } catch (e) {
+      console.log('Error fetching orders:', e);
+    } finally {
+      setIsFetching(false);
+      setRefreshing(false);
+    }
+  }, [user?.uid, dispatch]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   const isEmpty = !activeOrder && pastOrders.length === 0;
+
+  if (isFetching && pastOrders.length === 0) {
+    return (
+      <View style={[s.container, s.centered]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={s.loadingText}>Loading your orders...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={s.container}>
@@ -31,7 +74,14 @@ const OrdersScreen: React.FC = () => {
             style={{ marginTop: Spacing.xl, width: 220 }} />
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => fetchOrders(true)}
+              colors={[Colors.primary]} tintColor={Colors.primary} />
+          }
+        >
           {/* Active Order */}
           {activeOrder && (
             <TouchableOpacity style={s.activeCard}
@@ -42,7 +92,7 @@ const OrdersScreen: React.FC = () => {
                   <Text style={s.activeName}>{activeOrder.restaurantName}</Text>
                   <View style={[s.statusBadge, { backgroundColor: getOrderStatusColor(activeOrder.status) + '20' }]}>
                     <Text style={[s.statusText, { color: getOrderStatusColor(activeOrder.status) }]}>
-                      {activeOrder.status.replace('_', ' ')}
+                      {activeOrder.status.replace(/_/g, ' ')}
                     </Text>
                   </View>
                 </View>
@@ -75,7 +125,7 @@ const OrdersScreen: React.FC = () => {
               <View style={s.orderBottom}>
                 <View style={[s.statusBadge, { backgroundColor: getOrderStatusColor(order.status) + '20' }]}>
                   <Text style={[s.statusText, { color: getOrderStatusColor(order.status) }]}>
-                    {order.status}
+                    {order.status.replace(/_/g, ' ')}
                   </Text>
                 </View>
                 <TouchableOpacity style={s.reorderBtn}>
@@ -93,6 +143,8 @@ const OrdersScreen: React.FC = () => {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { ...Typography.body, color: Colors.textSecondary, marginTop: Spacing.md },
   headerTitle: { ...Typography.h2, color: Colors.textPrimary, paddingHorizontal: Spacing.xl, paddingTop: Spacing.xxl, paddingBottom: Spacing.md },
   scrollContent: { paddingHorizontal: Spacing.xl },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center' },
