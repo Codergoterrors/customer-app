@@ -157,7 +157,18 @@ const OrderTrackingScreen: React.FC = () => {
         }
         if (updatedOrder.status === 'CANCELLED') {
           dispatch(clearActiveOrder());
-          setTimeout(() => navigation.popToTop(), 500);
+          // Fix #4: If driver cancelled, show reason to customer before navigating away
+          if (updatedOrder.cancelledBy === 'rider') {
+            const reason = updatedOrder.cancelReason || 'No reason provided';
+            const { Alert } = require('react-native');
+            Alert.alert(
+              'Order Cancelled',
+              `Your delivery partner cancelled the order.\n\nReason: ${reason}`,
+              [{ text: 'OK', onPress: () => navigation.popToTop() }],
+            );
+          } else {
+            setTimeout(() => navigation.popToTop(), 500);
+          }
         }
       }
     });
@@ -165,8 +176,11 @@ const OrderTrackingScreen: React.FC = () => {
   }, [orderId, dispatch, navigation]);
 
   // ── Listen to rider live location ─────────────────────────────────────────
+  // Fix #2: Use order?.riderId (local snapshot state) instead of activeOrder?.riderId
+  // (Redux value which may lag behind). This ensures the listener subscribes as soon
+  // as the Firestore snapshot is received, not just when Redux is updated.
   useEffect(() => {
-    const rId = activeOrder?.riderId;
+    const rId = order?.riderId;
     if (!rId) return;
     const unsubLocation = orderService.onRiderLocationUpdate(
       rId,
@@ -179,7 +193,7 @@ const OrderTrackingScreen: React.FC = () => {
       },
     );
     return () => unsubLocation();
-  }, [activeOrder?.riderId, dispatch]);
+  }, [order?.riderId, dispatch]);
 
   // ── Fetch OSRM route when rider location or phase changes ─────────────────
   const fetchAndSetRoute = useCallback(async (riderLat: number, riderLng: number) => {
