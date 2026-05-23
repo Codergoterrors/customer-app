@@ -87,6 +87,13 @@ const orderSlice = createSlice({
       }
     },
     clearActiveOrder(state) {
+      // Move current active order to pastOrders before clearing
+      if (state.activeOrder) {
+        const exists = state.pastOrders.find(o => o.orderId === state.activeOrder!.orderId);
+        if (!exists) {
+          state.pastOrders = [state.activeOrder, ...state.pastOrders];
+        }
+      }
       state.activeOrder = null;
       state.riderLocation = null;
     },
