@@ -37,7 +37,7 @@ customer-app/
    ```bash
    npm install --legacy-peer-deps
    ```
-  
+   
 2. **iOS Setup**:
    ```bash
    cd ios
