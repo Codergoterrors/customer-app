@@ -29,7 +29,7 @@ customer-app/
 │   └── utils/          # Helper functions and Mock Data
 └── App.tsx             # Application Entry Point
 ```
-
+ 
 ## 🛠️ Setup & Running
 
 1. **Install Dependencies**:
