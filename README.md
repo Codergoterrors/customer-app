@@ -33,7 +33,7 @@ customer-app/
 ## 🛠️ Setup & Running
 
 1. **Install Dependencies**:
-   Due to React 19 peer dependencies, install using legacy peers:
+   Due to React 19 peer dependencies, install using legacy peers: 
    ```bash
    npm install --legacy-peer-deps
    ```
