@@ -471,21 +471,84 @@ class OrderService {
   }
 
   // Listen to rider live location (real-time)
+  // Uses dual strategy:
+  //   Primary  — Firebase Realtime Database (RTDB): instant updates every ~3s
+  //   Fallback — Firestore polling every 8s: used when RTDB is blocked (rules not deployed)
   onRiderLocationUpdate(
     riderId: string,
     callback: (location: RiderLiveLocation | null) => void,
   ): () => void {
-    const ref = database().ref(`liveLocations/${riderId}`);
-    const handler = ref.on('value', (snapshot) => {
-      if (snapshot.exists()) {
-        callback(snapshot.val() as RiderLiveLocation);
-      } else {
-        callback(null);
-      }
-    });
+    let lastRTDBUpdateAt = 0; // timestamp of last RTDB update received
+    let firestoreInterval: ReturnType<typeof setInterval> | null = null;
+    let rtdbRef: any = null;
+    let rtdbHandler: any = null;
 
-    return () => ref.off('value', handler);
+    // ── Strategy 1: RTDB real-time listener ──────────────────────────────────
+    try {
+      rtdbRef = database().ref(`liveLocations/${riderId}`);
+      rtdbHandler = rtdbRef.on(
+        'value',
+        (snapshot: any) => {
+          if (snapshot.exists()) {
+            lastRTDBUpdateAt = Date.now();
+            callback(snapshot.val() as RiderLiveLocation);
+          }
+        },
+        (error: Error) => {
+          // RTDB read blocked (rules not deployed or URL missing) — fallback takes over
+          console.log('[RTDB] Location listener error (fallback active):', error.message);
+        },
+      );
+    } catch (err) {
+      console.log('[RTDB] Failed to initialize listener (fallback active):', err);
+    }
+
+    // ── Strategy 2: Firestore fallback polling ────────────────────────────────
+    // Reads currentLat/currentLng from riders/{riderId} doc (driver updates every 15s).
+    // Only fires when RTDB has been silent for more than 10 seconds.
+    const pollFirestoreLocation = async () => {
+      const msSinceRTDB = Date.now() - lastRTDBUpdateAt;
+      if (lastRTDBUpdateAt > 0 && msSinceRTDB < 10000) {
+        return; // RTDB is live and recent — no need to poll
+      }
+      try {
+        const riderDoc = await firestore().collection('riders').doc(riderId).get();
+        if (riderDoc.exists()) {
+          const data = riderDoc.data();
+          if (data?.currentLat && data?.currentLng) {
+            const loc: RiderLiveLocation = {
+              lat: data.currentLat,
+              lng: data.currentLng,
+              heading: data.heading || 0,
+              speed: data.speed || 0,
+              updatedAt: data.updatedAt || Date.now(),
+              isOnline: data.isOnline ?? true,
+              activeOrderId: data.activeOrderId,
+            };
+            callback(loc);
+          }
+        }
+      } catch (e) {
+        console.log('[FIRESTORE] Error polling rider location:', e);
+      }
+    };
+
+    // Poll immediately on mount (so there's no blank wait on first load)
+    // then every 8 seconds
+    pollFirestoreLocation();
+    firestoreInterval = setInterval(pollFirestoreLocation, 8000);
+
+    // Return cleanup function
+    return () => {
+      if (rtdbRef && rtdbHandler) {
+        try { rtdbRef.off('value', rtdbHandler); } catch (_) {}
+      }
+      if (firestoreInterval) {
+        clearInterval(firestoreInterval);
+      }
+    };
   }
+
 
   // Submit order rating
   async submitRating(
