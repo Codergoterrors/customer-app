@@ -1,4 +1,4 @@
-// FoodApp Customer — Main App Entry Point
+// FoodApp Customer — Main App Entry Point 
 import React from 'react';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
