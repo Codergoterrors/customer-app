@@ -191,6 +191,11 @@ export interface Order {
   riderVehicle?: string;
   riderPlateNumber?: string;
   riderPhotoUrl?: string;
+  // Live rider coordinates embedded in order doc (written by driver app every 10s)
+  // Used by customer app as a guaranteed tracking fallback — no extra Firebase rules needed
+  riderCurrentLat?: number;
+  riderCurrentLng?: number;
+  riderHeading?: number;
   status: OrderStatus;
   items: OrderItem[];
   pricing: OrderPricing;
@@ -202,6 +207,8 @@ export interface Order {
   statusTimeline: StatusTimelineEntry[];
   deliveryPin?: string;
   orderNotReady?: boolean;
+  cancelledBy?: 'customer' | 'rider' | 'restaurant';
+  cancelReason?: string;
   driverPayout?: number;
   routeCoordinates?: Array<{ latitude: number; longitude: number }>;
   restaurantRating?: number;

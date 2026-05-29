@@ -152,12 +152,32 @@ const OrderTrackingScreen: React.FC = () => {
       if (updatedOrder) {
         setOrder(updatedOrder);
         dispatch(setActiveOrder(updatedOrder));
+
+        // ── Guaranteed rider location fallback ──────────────────────────────
+        // Driver app writes riderCurrentLat/Lng into the order doc every 10s.
+        // Customer already has read access to their own order, so this path
+        // works even if RTDB rules are not deployed and Firestore riders/ rules
+        // are not deployed. RTDB listener (onRiderLocationUpdate) will take over
+        // with higher-frequency updates once/if permissions allow.
+        if (updatedOrder.riderCurrentLat && updatedOrder.riderCurrentLng) {
+          const embeddedLoc: RiderLiveLocation = {
+            lat: updatedOrder.riderCurrentLat,
+            lng: updatedOrder.riderCurrentLng,
+            heading: updatedOrder.riderHeading || 0,
+            speed: 0,
+            updatedAt: Date.now(),
+            isOnline: true,
+          };
+          setRiderLoc(embeddedLoc);
+          dispatch(setRiderLocation(embeddedLoc));
+          lastRiderLocRef.current = { lat: embeddedLoc.lat, lng: embeddedLoc.lng };
+        }
+
         if (updatedOrder.status === 'DELIVERED') {
           setTimeout(() => navigation.navigate('DeliveryConfirmed', { orderId }), 1500);
         }
         if (updatedOrder.status === 'CANCELLED') {
           dispatch(clearActiveOrder());
-          // Fix #4: If driver cancelled, show reason to customer before navigating away
           if (updatedOrder.cancelledBy === 'rider') {
             const reason = updatedOrder.cancelReason || 'No reason provided';
             const { Alert } = require('react-native');
@@ -174,6 +194,7 @@ const OrderTrackingScreen: React.FC = () => {
     });
     return () => unsubOrder();
   }, [orderId, dispatch, navigation]);
+
 
   // ── Listen to rider live location ─────────────────────────────────────────
   // Fix #2: Use order?.riderId (local snapshot state) instead of activeOrder?.riderId
