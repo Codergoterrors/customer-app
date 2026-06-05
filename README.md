@@ -1,4 +1,4 @@
-# FoodApp — Customer Application 
+# FoodApp — Customer Application
 
 This directory contains the source code for the **Customer Application** of the FoodApp ecosystem. It is a React Native app built with TypeScript, Redux Toolkit, and Firebase. 
 
