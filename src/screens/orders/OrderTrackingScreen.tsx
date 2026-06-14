@@ -114,6 +114,11 @@ const RedDropPin: React.FC = () => (
 );
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
+/**
+ * OrderTrackingScreen provides real-time visibility into the order lifecycle.
+ * It implements a hybrid tracking strategy using Firebase Realtime Database
+ * for high-frequency updates and Firestore snapshots as a robust fallback.
+ */
 const OrderTrackingScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
   const navigation = useNavigation<Nav>();
