@@ -1,5 +1,5 @@
 // Orders Screen — Active + Past orders with Firestore fetch
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -8,11 +8,13 @@ import firestore from '@react-native-firebase/firestore';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants';
 import { Button } from '../../components';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
-import { setPastOrders } from '../../store/slices/orderSlice';
+import { setPastOrders, setActiveOrder, clearActiveOrder } from '../../store/slices/orderSlice';
 import { formatCurrency, formatDate, getOrderStatusColor } from '../../utils';
 import type { OrdersStackParamList, Order } from '../../types';
 
 type Nav = NativeStackNavigationProp<OrdersStackParamList, 'Orders'>;
+
+const ACTIVE_STATUSES = new Set(['PLACED', 'CONFIRMED', 'PREPARING', 'RIDER_ASSIGNED', 'PICKED_UP', 'ON_THE_WAY']);
 
 const OrdersScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
@@ -21,6 +23,40 @@ const OrdersScreen: React.FC = () => {
   const user = useAppSelector((s) => s.auth.user);
   const [isFetching, setIsFetching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const activeListenerRef = useRef<(() => void) | null>(null);
+
+  // ── Attach live listener for any in-progress order ──────────────────────────
+  const attachActiveOrderListener = useCallback((orderId: string) => {
+    // Detach previous listener if any
+    if (activeListenerRef.current) {
+      activeListenerRef.current();
+      activeListenerRef.current = null;
+    }
+    const unsub = firestore().collection('orders').doc(orderId).onSnapshot(doc => {
+      if (doc.exists()) {
+        const data = { orderId: doc.id, ...doc.data() } as Order;
+        if (ACTIVE_STATUSES.has(data.status)) {
+          dispatch(setActiveOrder(data));
+        } else {
+          // Order finished — move to history
+          dispatch(clearActiveOrder());
+        }
+      } else {
+        dispatch(clearActiveOrder());
+      }
+    });
+    activeListenerRef.current = unsub;
+    return unsub;
+  }, [dispatch]);
+
+  // Cleanup listener on unmount
+  useEffect(() => {
+    return () => {
+      if (activeListenerRef.current) {
+        activeListenerRef.current();
+      }
+    };
+  }, []);
 
   const fetchOrders = useCallback(async (isRefresh = false) => {
     if (!user?.uid) return;
@@ -33,22 +69,36 @@ const OrdersScreen: React.FC = () => {
         .limit(30)
         .get();
       const orders = snapshot.docs.map(doc => ({ orderId: doc.id, ...doc.data() } as Order));
-      // Filter out active order so it doesn't appear in past orders list
-      const past = orders.filter(o => o.status !== 'PLACED' && o.status !== 'CONFIRMED' &&
-        o.status !== 'PREPARING' && o.status !== 'RIDER_ASSIGNED' &&
-        o.status !== 'PICKED_UP' && o.status !== 'ON_THE_WAY');
+
+      // Separate active vs past
+      const activeFromFirestore = orders.find(o => ACTIVE_STATUSES.has(o.status));
+      const past = orders.filter(o => !ACTIVE_STATUSES.has(o.status));
+
       dispatch(setPastOrders(past));
+
+      if (activeFromFirestore) {
+        // Restore active order from Firestore (covers app restart scenario)
+        dispatch(setActiveOrder(activeFromFirestore));
+        attachActiveOrderListener(activeFromFirestore.orderId);
+      } else if (activeOrder && ACTIVE_STATUSES.has(activeOrder.status)) {
+        // Redis-persist had an active order — verify it's still live
+        attachActiveOrderListener(activeOrder.orderId);
+      } else if (activeOrder && !ACTIVE_STATUSES.has(activeOrder.status)) {
+        // Stale persisted active order — clear it
+        dispatch(clearActiveOrder());
+      }
     } catch (e) {
       console.log('Error fetching orders:', e);
     } finally {
       setIsFetching(false);
       setRefreshing(false);
     }
-  }, [user?.uid, dispatch]);
+  }, [user?.uid, dispatch, activeOrder, attachActiveOrderListener]);
 
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
+  }, [user?.uid]); // only re-fetch when user changes, not on every activeOrder change
+
 
   const isEmpty = !activeOrder && pastOrders.length === 0;
 
