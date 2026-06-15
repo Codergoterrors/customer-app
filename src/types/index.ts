@@ -281,6 +281,7 @@ export type HomeStackParamList = {
   SelectAddress: undefined;
   Help: { orderId: string; canCancel: boolean };
   CancelOrder: { orderId: string };
+  OrderCancelled: { orderId: string; cancelledBy: 'customer' | 'rider' | 'restaurant'; cancelReason?: string };
 };
 
 export type OrdersStackParamList = {

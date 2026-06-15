@@ -183,17 +183,13 @@ const OrderTrackingScreen: React.FC = () => {
         }
         if (updatedOrder.status === 'CANCELLED') {
           dispatch(clearActiveOrder());
-          if (updatedOrder.cancelledBy === 'rider') {
-            const reason = updatedOrder.cancelReason || 'No reason provided';
-            const { Alert } = require('react-native');
-            Alert.alert(
-              'Order Cancelled',
-              `Your delivery partner cancelled the order.\n\nReason: ${reason}`,
-              [{ text: 'OK', onPress: () => navigation.popToTop() }],
-            );
-          } else {
-            setTimeout(() => navigation.popToTop(), 500);
-          }
+          // Navigate to dedicated cancelled screen with the reason shown clearly
+          navigation.replace('OrderCancelled', {
+            orderId,
+            cancelledBy: updatedOrder.cancelledBy || 'customer',
+            cancelReason: updatedOrder.cancelReason,
+          });
+          return;
         }
       }
     });

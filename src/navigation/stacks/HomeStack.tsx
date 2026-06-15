@@ -14,6 +14,7 @@ import DeliveryConfirmedScreen from '../../screens/orders/DeliveryConfirmedScree
 import AddAddressScreen from '../../screens/home/AddAddressScreen';
 import HelpScreen from '../../screens/orders/HelpScreen';
 import CancelOrderScreen from '../../screens/orders/CancelOrderScreen';
+import OrderCancelledScreen from '../../screens/orders/OrderCancelledScreen';
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
@@ -50,6 +51,11 @@ const HomeStack: React.FC = () => {
         name="CancelOrder"
         component={CancelOrderScreen}
         options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="OrderCancelled"
+        component={OrderCancelledScreen}
+        options={{ animation: 'fade', gestureEnabled: false }}
       />
     </Stack.Navigator>
   );
