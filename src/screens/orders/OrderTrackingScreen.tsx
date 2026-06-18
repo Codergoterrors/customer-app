@@ -7,7 +7,21 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapLibreGL from '@maplibre/maplibre-react-native';
+MapLibreGL.setAccessToken(null);
+
+const OSM_STYLE = JSON.stringify({
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }],
+});
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { setActiveOrder, setRiderLocation, clearActiveOrder } from '../../store/slices/orderSlice';
@@ -130,7 +144,7 @@ const OrderTrackingScreen: React.FC = () => {
   const [order, setOrder] = useState<Order | null>(activeOrder);
   const [riderLocation, setRiderLoc] = useState<RiderLiveLocation | null>(null);
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
-  const mapRef = useRef<MapView>(null);
+  const cameraRef = useRef<any>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const lastRouteFetchRef = useRef(0);
   const lastRiderLocRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -302,10 +316,14 @@ const OrderTrackingScreen: React.FC = () => {
 
     if (coords.length >= 2) {
       setTimeout(() => {
-        mapRef.current?.fitToCoordinates(coords, {
-          edgePadding: { top: 80, right: 60, bottom: 80, left: 60 },
-          animated: true,
-        });
+        const lats = coords.map(c => c.latitude);
+        const lngs = coords.map(c => c.longitude);
+        cameraRef.current?.fitBounds(
+          [Math.max(...lngs), Math.max(...lats)],
+          [Math.min(...lngs), Math.min(...lats)],
+          [60, 80, 60, 80],
+          600,
+        );
       }, 600);
     }
   }, [riderLocation?.lat, riderLocation?.lng, isDeliveryPhase, order]);
@@ -401,68 +419,104 @@ const OrderTrackingScreen: React.FC = () => {
         {/* Map */}
         {showMap ? (
           <View style={s.mapWrapper}>
-            <MapView
-              ref={mapRef}
+            <MapLibreGL.MapView
               style={s.map}
-              provider={PROVIDER_GOOGLE}
-              initialRegion={{
-                latitude: order?.deliveryAddress.lat || 18.5204,
-                longitude: order?.deliveryAddress.lng || 73.8567,
-                latitudeDelta: 0.015,
-                longitudeDelta: 0.015,
-              }}
-              showsUserLocation={false}>
+              styleURL={OSM_STYLE}
+              attributionEnabled={true}
+              logoEnabled={false}
+              compassEnabled={false}>
+
+              <MapLibreGL.Camera
+                ref={cameraRef}
+                zoomLevel={14}
+                centerCoordinate={[
+                  order?.deliveryAddress.lng || 73.8567,
+                  order?.deliveryAddress.lat || 18.5204,
+                ]}
+              />
 
               {/* Restaurant marker (green circle) */}
               {order && order.restaurantLat !== undefined && order.restaurantLat !== 0 && (
-                <Marker coordinate={{ latitude: order.restaurantLat!, longitude: order.restaurantLng! }} anchor={{ x: 0.5, y: 0.5 }}>
+                <MapLibreGL.PointAnnotation
+                  id="restaurant-marker"
+                  coordinate={[order.restaurantLng!, order.restaurantLat!]}>
                   <View style={s.restaurantPin}>
                     <Icon name="silverware-fork-knife" size={16} color="#FFF" />
                   </View>
-                </Marker>
+                </MapLibreGL.PointAnnotation>
               )}
 
               {/* Delivery location marker — Big Red Teardrop Pin */}
               {order && (
-                <Marker coordinate={{ latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng }} anchor={{ x: 0.5, y: 1 }}>
+                <MapLibreGL.PointAnnotation
+                  id="drop-marker"
+                  coordinate={[order.deliveryAddress.lng, order.deliveryAddress.lat]}>
                   <RedDropPin />
-                </Marker>
+                </MapLibreGL.PointAnnotation>
               )}
 
               {/* Rider live location — bike icon */}
               {riderLocation && (
-                <Marker coordinate={{ latitude: riderLocation.lat, longitude: riderLocation.lng }} anchor={{ x: 0.5, y: 0.5 }}>
+                <MapLibreGL.PointAnnotation
+                  id="rider-marker"
+                  coordinate={[riderLocation.lng, riderLocation.lat]}>
                   <View style={s.riderMarker}>
                     <Icon name="motorbike" size={22} color="#000" />
                   </View>
-                </Marker>
+                </MapLibreGL.PointAnnotation>
               )}
 
               {/* Road-following route — bold and dark */}
               {riderLocation && displayRoute.length >= 2 && (
-                <Polyline
-                  coordinates={displayRoute}
-                  strokeColor="#1A1A2E"
-                  strokeWidth={6}
-                  lineCap="round"
-                  lineJoin="round"
-                />
+                <MapLibreGL.ShapeSource
+                  id="tracking-route"
+                  shape={{
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                      type: 'LineString',
+                      coordinates: displayRoute.map(c => [c.longitude, c.latitude]),
+                    },
+                  }}>
+                  <MapLibreGL.LineLayer
+                    id="tracking-route-layer"
+                    style={{
+                      lineColor: '#1A1A2E',
+                      lineWidth: 6,
+                      lineCap: 'round',
+                      lineJoin: 'round',
+                    }}
+                  />
+                </MapLibreGL.ShapeSource>
               )}
 
               {/* Fallback straight line if no OSRM route yet */}
               {riderLocation && displayRoute.length === 0 && order && (
-                <Polyline
-                  coordinates={[
-                    { latitude: riderLocation.lat, longitude: riderLocation.lng },
-                    isDeliveryPhase
-                      ? { latitude: order.deliveryAddress.lat, longitude: order.deliveryAddress.lng }
-                      : { latitude: order.restaurantLat || 0, longitude: order.restaurantLng || 0 },
-                  ]}
-                  strokeColor="#1A1A2E"
-                  strokeWidth={6}
-                />
+                <MapLibreGL.ShapeSource
+                  id="fallback-route"
+                  shape={{
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                      type: 'LineString',
+                      coordinates: [
+                        [riderLocation.lng, riderLocation.lat],
+                        isDeliveryPhase
+                          ? [order.deliveryAddress.lng, order.deliveryAddress.lat]
+                          : [order.restaurantLng || 0, order.restaurantLat || 0],
+                      ],
+                    },
+                  }}>
+                  <MapLibreGL.LineLayer
+                    id="fallback-route-layer"
+                    style={{
+                      lineColor: '#1A1A2E',
+                      lineWidth: 6,
+                    }}
+                  />
+                </MapLibreGL.ShapeSource>
               )}
-            </MapView>
+            </MapLibreGL.MapView>
           </View>
         ) : (
           <View style={[s.illustrationSection, { backgroundColor: isDark ? '#0A0A0A' : '#FAFAFA' }]}>

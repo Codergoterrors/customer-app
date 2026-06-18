@@ -14,7 +14,21 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import MapView, { Marker, Region, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapLibreGL from '@maplibre/maplibre-react-native';
+MapLibreGL.setAccessToken(null);
+
+const OSM_STYLE = JSON.stringify({
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }],
+});
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants';
 import { Button } from '../../components';
@@ -39,7 +53,7 @@ const AddAddressScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const user = useAppSelector((s) => s.auth.user);
-  const mapRef = useRef<MapView>(null);
+  const cameraRef = useRef<any>(null);
 
   const [step, setStep] = useState<AddressStep>('map');
   const [selectedLocation, setSelectedLocation] = useState({
@@ -53,11 +67,11 @@ const AddAddressScreen: React.FC = () => {
   const [label, setLabel] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleRegionChange = useCallback((region: Region) => {
-    setSelectedLocation({
-      latitude: region.latitude,
-      longitude: region.longitude,
-    });
+  const handleRegionChange = useCallback((feature: any) => {
+    if (feature && feature.geometry && feature.geometry.coordinates) {
+      const [longitude, latitude] = feature.geometry.coordinates;
+      setSelectedLocation({ latitude, longitude });
+    }
   }, []);
 
   const handleConfirmLocation = useCallback(() => {
@@ -109,15 +123,19 @@ const AddAddressScreen: React.FC = () => {
     return (
       <View style={s.container}>
         {/* Map */}
-        <MapView
-          ref={mapRef}
+        <MapLibreGL.MapView
           style={s.map}
-          provider={PROVIDER_GOOGLE}
-          initialRegion={INITIAL_REGION}
-          onRegionChangeComplete={handleRegionChange}
-          showsUserLocation
-          showsMyLocationButton={false}
-        />
+          styleURL={OSM_STYLE}
+          onRegionDidChange={handleRegionChange}
+          attributionEnabled={true}
+          logoEnabled={false}
+          compassEnabled={false}>
+          <MapLibreGL.Camera
+            ref={cameraRef}
+            zoomLevel={15}
+            centerCoordinate={[INITIAL_REGION.longitude, INITIAL_REGION.latitude]}
+          />
+        </MapLibreGL.MapView>
 
         {/* Center pin (fixed overlay) */}
         <View style={s.centerPin} pointerEvents="none">
@@ -131,7 +149,11 @@ const AddAddressScreen: React.FC = () => {
 
         {/* My location button */}
         <TouchableOpacity style={s.myLocationBtn} onPress={() => {
-          mapRef.current?.animateToRegion(INITIAL_REGION, 500);
+          cameraRef.current?.setCamera({
+            centerCoordinate: [INITIAL_REGION.longitude, INITIAL_REGION.latitude],
+            zoomLevel: 15,
+            animationDuration: 500,
+          });
         }}>
           <Icon name="crosshairs-gps" size={22} color={Colors.primary} />
         </TouchableOpacity>
@@ -169,23 +191,25 @@ const AddAddressScreen: React.FC = () => {
 
         {/* Mini map preview */}
         <View style={s.miniMapWrapper}>
-          <MapView
+          <MapLibreGL.MapView
             style={s.miniMap}
-            provider={PROVIDER_GOOGLE}
-            region={{
-              latitude: selectedLocation.latitude,
-              longitude: selectedLocation.longitude,
-              latitudeDelta: 0.005,
-              longitudeDelta: 0.005,
-            }}
+            styleURL={OSM_STYLE}
             scrollEnabled={false}
             zoomEnabled={false}
             pitchEnabled={false}
-            rotateEnabled={false}>
-            <Marker coordinate={selectedLocation}>
+            rotateEnabled={false}
+            attributionEnabled={false}
+            logoEnabled={false}>
+            <MapLibreGL.Camera
+              zoomLevel={15}
+              centerCoordinate={[selectedLocation.longitude, selectedLocation.latitude]}
+            />
+            <MapLibreGL.PointAnnotation
+              id="selected-marker"
+              coordinate={[selectedLocation.longitude, selectedLocation.latitude]}>
               <Icon name="map-marker" size={32} color={Colors.primary} />
-            </Marker>
-          </MapView>
+            </MapLibreGL.PointAnnotation>
+          </MapLibreGL.MapView>
           <TouchableOpacity style={s.changeLocationBtn} onPress={() => setStep('map')}>
             <Text style={s.changeLocationText}>Change</Text>
           </TouchableOpacity>
