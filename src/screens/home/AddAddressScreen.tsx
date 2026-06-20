@@ -15,7 +15,6 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MapLibreGL from '@maplibre/maplibre-react-native';
-MapLibreGL.setAccessToken(null);
 
 const OSM_STYLE = JSON.stringify({
   version: 8,

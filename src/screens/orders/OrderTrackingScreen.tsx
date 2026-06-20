@@ -8,7 +8,6 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import MapLibreGL from '@maplibre/maplibre-react-native';
-MapLibreGL.setAccessToken(null);
 
 const OSM_STYLE = JSON.stringify({
   version: 8,

@@ -4,10 +4,15 @@ import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import MapLibreGL from '@maplibre/maplibre-react-native';
 import { store, persistor } from './src/store';
 import { RootNavigator } from './src/navigation';
 import { ThemeProvider } from './src/theme/ThemeContext';
 import { StyleSheet } from 'react-native';
+
+// Calling setAccessToken at module-level in screens causes
+// "Cannot read property 'setAccessToken' of undefined" on the New Architecture.
+MapLibreGL.setAccessToken(null);
 
 const App: React.FC = () => {
   return (
