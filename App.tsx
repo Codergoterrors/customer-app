@@ -11,13 +11,6 @@ import { ThemeProvider } from './src/theme/ThemeContext';
 import { StyleSheet } from 'react-native';
 
 const App: React.FC = () => {
-  useEffect(() => {
-    // Must be called inside a component lifecycle (useEffect), NOT at module level.
-    // On the New Architecture (Fabric/TurboModules), native modules aren't available
-    // during bundle evaluation — calling setAccessToken at module scope causes
-    // "Cannot read property 'setAccessToken' of undefined" crash on launch.
-    MapLibreGL.setAccessToken(null);
-  }, []);
 
   return (
     <GestureHandlerRootView style={styles.root}>
