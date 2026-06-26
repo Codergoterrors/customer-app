@@ -27,7 +27,7 @@ const OSM_STYLE = JSON.stringify({
     },
   },
   layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }],
-};
+});
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants';
 import { Button } from '../../components';

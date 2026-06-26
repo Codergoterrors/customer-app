@@ -20,7 +20,7 @@ const OSM_STYLE = JSON.stringify({
     },
   },
   layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }],
-};
+});
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { setActiveOrder, setRiderLocation, clearActiveOrder } from '../../store/slices/orderSlice';
@@ -491,7 +491,7 @@ const OrderTrackingScreen: React.FC = () => {
 
               {/* Fallback straight line if no OSRM route yet */}
               {riderLocation && displayRoute.length === 0 && order && (
-                <ShapeSource
+                <MapLibreGL.ShapeSource
                   id="fallback-route"
                   shape={{
                     type: 'Feature',
@@ -506,7 +506,7 @@ const OrderTrackingScreen: React.FC = () => {
                       ],
                     },
                   }}>
-                  <LineLayer
+                  <MapLibreGL.LineLayer
                     id="fallback-route-layer"
                     style={{
                       lineColor: '#1A1A2E',
