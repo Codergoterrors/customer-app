@@ -16,7 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Map, Camera, PointAnnotation, ShapeSource, LineLayer, SymbolLayer } from '@maplibre/maplibre-react-native';
 
-const OSM_STYLE = JSON.stringify({
+const OSM_STYLE = {
   version: 8,
   sources: {
     osm: {
@@ -27,7 +27,7 @@ const OSM_STYLE = JSON.stringify({
     },
   },
   layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }],
-});
+};
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors, Typography, Spacing, BorderRadius } from '../../constants';
 import { Button } from '../../components';
