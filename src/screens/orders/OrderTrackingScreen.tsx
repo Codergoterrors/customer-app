@@ -7,9 +7,9 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import { Map, Camera, PointAnnotation, ShapeSource, LineLayer, SymbolLayer } from '@maplibre/maplibre-react-native';
+import MapLibreGL from '@maplibre/maplibre-react-native';
 
-const OSM_STYLE = {
+const OSM_STYLE = JSON.stringify({
   version: 8,
   sources: {
     osm: {
@@ -418,14 +418,14 @@ const OrderTrackingScreen: React.FC = () => {
         {/* Map */}
         {showMap ? (
           <View style={s.mapWrapper}>
-            <Map
+            <MapLibreGL.MapView
               style={s.map}
-              mapStyle={OSM_STYLE}
+              styleURL={OSM_STYLE}
               attributionEnabled={true}
               logoEnabled={false}
               compassEnabled={false}>
 
-              <Camera
+              <MapLibreGL.Camera
                 ref={cameraRef}
                 zoomLevel={14}
                 centerCoordinate={[
@@ -436,38 +436,38 @@ const OrderTrackingScreen: React.FC = () => {
 
               {/* Restaurant marker (green circle) */}
               {order && order.restaurantLat !== undefined && order.restaurantLat !== 0 && (
-                <PointAnnotation
+                <MapLibreGL.PointAnnotation
                   id="restaurant-marker"
                   coordinate={[order.restaurantLng!, order.restaurantLat!]}>
                   <View style={s.restaurantPin}>
                     <Icon name="silverware-fork-knife" size={16} color="#FFF" />
                   </View>
-                </PointAnnotation>
+                </MapLibreGL.PointAnnotation>
               )}
 
               {/* Delivery location marker — Big Red Teardrop Pin */}
               {order && (
-                <PointAnnotation
+                <MapLibreGL.PointAnnotation
                   id="drop-marker"
                   coordinate={[order.deliveryAddress.lng, order.deliveryAddress.lat]}>
                   <RedDropPin />
-                </PointAnnotation>
+                </MapLibreGL.PointAnnotation>
               )}
 
               {/* Rider live location — bike icon */}
               {riderLocation && (
-                <PointAnnotation
+                <MapLibreGL.PointAnnotation
                   id="rider-marker"
                   coordinate={[riderLocation.lng, riderLocation.lat]}>
                   <View style={s.riderMarker}>
                     <Icon name="motorbike" size={22} color="#000" />
                   </View>
-                </PointAnnotation>
+                </MapLibreGL.PointAnnotation>
               )}
 
               {/* Road-following route — bold and dark */}
               {riderLocation && displayRoute.length >= 2 && (
-                <ShapeSource
+                <MapLibreGL.ShapeSource
                   id="tracking-route"
                   shape={{
                     type: 'Feature',
@@ -477,7 +477,7 @@ const OrderTrackingScreen: React.FC = () => {
                       coordinates: displayRoute.map(c => [c.longitude, c.latitude]),
                     },
                   }}>
-                  <LineLayer
+                  <MapLibreGL.LineLayer
                     id="tracking-route-layer"
                     style={{
                       lineColor: '#1A1A2E',
@@ -486,7 +486,7 @@ const OrderTrackingScreen: React.FC = () => {
                       lineJoin: 'round',
                     }}
                   />
-                </ShapeSource>
+                </MapLibreGL.ShapeSource>
               )}
 
               {/* Fallback straight line if no OSRM route yet */}
@@ -513,9 +513,9 @@ const OrderTrackingScreen: React.FC = () => {
                       lineWidth: 6,
                     }}
                   />
-                </ShapeSource>
+                </MapLibreGL.ShapeSource>
               )}
-            </Map>
+            </MapLibreGL.MapView>
           </View>
         ) : (
           <View style={[s.illustrationSection, { backgroundColor: isDark ? '#0A0A0A' : '#FAFAFA' }]}>

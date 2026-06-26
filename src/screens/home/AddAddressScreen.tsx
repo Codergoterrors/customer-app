@@ -14,9 +14,9 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Map, Camera, PointAnnotation, ShapeSource, LineLayer, SymbolLayer } from '@maplibre/maplibre-react-native';
+import MapLibreGL from '@maplibre/maplibre-react-native';
 
-const OSM_STYLE = {
+const OSM_STYLE = JSON.stringify({
   version: 8,
   sources: {
     osm: {
@@ -122,19 +122,19 @@ const AddAddressScreen: React.FC = () => {
     return (
       <View style={s.container}>
         {/* Map */}
-        <Map
+        <MapLibreGL.MapView
           style={s.map}
-          mapStyle={OSM_STYLE}
+          styleURL={OSM_STYLE}
           onRegionDidChange={handleRegionChange}
           attributionEnabled={true}
           logoEnabled={false}
           compassEnabled={false}>
-          <Camera
+          <MapLibreGL.Camera
             ref={cameraRef}
             zoomLevel={15}
             centerCoordinate={[INITIAL_REGION.longitude, INITIAL_REGION.latitude]}
           />
-        </Map>
+        </MapLibreGL.MapView>
 
         {/* Center pin (fixed overlay) */}
         <View style={s.centerPin} pointerEvents="none">
@@ -190,25 +190,25 @@ const AddAddressScreen: React.FC = () => {
 
         {/* Mini map preview */}
         <View style={s.miniMapWrapper}>
-          <Map
+          <MapLibreGL.MapView
             style={s.miniMap}
-            mapStyle={OSM_STYLE}
+            styleURL={OSM_STYLE}
             scrollEnabled={false}
             zoomEnabled={false}
             pitchEnabled={false}
             rotateEnabled={false}
             attributionEnabled={false}
             logoEnabled={false}>
-            <Camera
+            <MapLibreGL.Camera
               zoomLevel={15}
               centerCoordinate={[selectedLocation.longitude, selectedLocation.latitude]}
             />
-            <PointAnnotation
+            <MapLibreGL.PointAnnotation
               id="selected-marker"
               coordinate={[selectedLocation.longitude, selectedLocation.latitude]}>
               <Icon name="map-marker" size={32} color={Colors.primary} />
-            </PointAnnotation>
-          </Map>
+            </MapLibreGL.PointAnnotation>
+          </MapLibreGL.MapView>
           <TouchableOpacity style={s.changeLocationBtn} onPress={() => setStep('map')}>
             <Text style={s.changeLocationText}>Change</Text>
           </TouchableOpacity>
