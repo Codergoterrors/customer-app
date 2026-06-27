@@ -112,6 +112,7 @@ const AddAddressScreen: React.FC = () => {
       <View style={s.container}>
         {/* Map */}
         <Map
+          androidView="texture"
           style={s.map}
           mapStyle={OSM_STYLE}
           onRegionDidChange={handleRegionChange}
@@ -180,7 +181,8 @@ const AddAddressScreen: React.FC = () => {
         {/* Mini map preview */}
         <View style={s.miniMapWrapper}>
           <Map
-            style={s.miniMap}
+            androidView="texture"
+          style={s.miniMap}
             mapStyle={OSM_STYLE}
             scrollEnabled={false}
             zoomEnabled={false}

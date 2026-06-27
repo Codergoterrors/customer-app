@@ -408,6 +408,7 @@ const OrderTrackingScreen: React.FC = () => {
         {showMap ? (
           <View style={s.mapWrapper}>
             <Map
+              androidView="texture"
               style={s.map}
               mapStyle={OSM_STYLE}
               attributionEnabled={true}
