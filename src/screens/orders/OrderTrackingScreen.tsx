@@ -7,7 +7,7 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import MapLibreGL from '@maplibre/maplibre-react-native';
+import { Map, Camera, Marker, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 
 const OSM_STYLE = JSON.stringify({
   version: 8,
@@ -418,14 +418,14 @@ const OrderTrackingScreen: React.FC = () => {
         {/* Map */}
         {showMap ? (
           <View style={s.mapWrapper}>
-            <MapLibreGL.MapView
+            <Map
               style={s.map}
               styleURL={OSM_STYLE}
               attributionEnabled={true}
               logoEnabled={false}
               compassEnabled={false}>
 
-              <MapLibreGL.Camera
+              <Camera
                 ref={cameraRef}
                 zoomLevel={14}
                 centerCoordinate={[
@@ -436,40 +436,40 @@ const OrderTrackingScreen: React.FC = () => {
 
               {/* Restaurant marker (green circle) */}
               {order && order.restaurantLat !== undefined && order.restaurantLat !== 0 && (
-                <MapLibreGL.PointAnnotation
+                <Marker
                   id="restaurant-marker"
                   coordinate={[order.restaurantLng!, order.restaurantLat!]}>
                   <View style={s.restaurantPin}>
                     <Icon name="silverware-fork-knife" size={16} color="#FFF" />
                   </View>
-                </MapLibreGL.PointAnnotation>
+                </Marker>
               )}
 
               {/* Delivery location marker — Big Red Teardrop Pin */}
               {order && (
-                <MapLibreGL.PointAnnotation
+                <Marker
                   id="drop-marker"
                   coordinate={[order.deliveryAddress.lng, order.deliveryAddress.lat]}>
                   <RedDropPin />
-                </MapLibreGL.PointAnnotation>
+                </Marker>
               )}
 
               {/* Rider live location — bike icon */}
               {riderLocation && (
-                <MapLibreGL.PointAnnotation
+                <Marker
                   id="rider-marker"
                   coordinate={[riderLocation.lng, riderLocation.lat]}>
                   <View style={s.riderMarker}>
                     <Icon name="motorbike" size={22} color="#000" />
                   </View>
-                </MapLibreGL.PointAnnotation>
+                </Marker>
               )}
 
               {/* Road-following route — bold and dark */}
               {riderLocation && displayRoute.length >= 2 && (
-                <MapLibreGL.ShapeSource
+                <GeoJSONSource
                   id="tracking-route"
-                  shape={{
+                  data={{
                     type: 'Feature',
                     properties: {},
                     geometry: {
@@ -477,23 +477,22 @@ const OrderTrackingScreen: React.FC = () => {
                       coordinates: displayRoute.map(c => [c.longitude, c.latitude]),
                     },
                   }}>
-                  <MapLibreGL.LineLayer
+                  <Layer
                     id="tracking-route-layer"
-                    style={{
-                      lineColor: '#1A1A2E',
-                      lineWidth: 6,
-                      lineCap: 'round',
-                      lineJoin: 'round',
+                    type="line"
+                    paint={{
+                      'line-color': '#1A1A2E',
+                      'line-width': 6,
                     }}
                   />
-                </MapLibreGL.ShapeSource>
+                </GeoJSONSource>
               )}
 
               {/* Fallback straight line if no OSRM route yet */}
               {riderLocation && displayRoute.length === 0 && order && (
-                <MapLibreGL.ShapeSource
+                <GeoJSONSource
                   id="fallback-route"
-                  shape={{
+                  data={{
                     type: 'Feature',
                     properties: {},
                     geometry: {
@@ -506,16 +505,17 @@ const OrderTrackingScreen: React.FC = () => {
                       ],
                     },
                   }}>
-                  <MapLibreGL.LineLayer
+                  <Layer
                     id="fallback-route-layer"
-                    style={{
-                      lineColor: '#1A1A2E',
-                      lineWidth: 6,
+                    type="line"
+                    paint={{
+                      'line-color': '#1A1A2E',
+                      'line-width': 6,
                     }}
                   />
-                </MapLibreGL.ShapeSource>
+                </GeoJSONSource>
               )}
-            </MapLibreGL.MapView>
+            </Map>
           </View>
         ) : (
           <View style={[s.illustrationSection, { backgroundColor: isDark ? '#0A0A0A' : '#FAFAFA' }]}>
